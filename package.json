@@ -1,0 +1,26 @@
+{
+  "name": "com.makargames.asset-icon-generator",
+  "version": "1.0.0",
+  "displayName": "Asset Icon Generator",
+  "description": "Unity Editor tool for generating high-quality PNG icons and thumbnails from prefabs and 3D models using real-time rendering.",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/makarGames/Unity-Asset-Icon-Generator#readme",
+  "changelogUrl": "https://github.com/makarGames/Unity-Asset-Icon-Generator/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/makarGames/Unity-Asset-Icon-Generator/blob/main/LICENSE",
+  "keywords": [
+    "editor",
+    "icon",
+    "thumbnail",
+    "prefab",
+    "render",
+    "screenshot",
+    "odin",
+    "productivity"
+  ],
+  "author": {
+    "name": "Makar Games",
+    "url": "https://github.com/makarGames"
+  },
+  "license": "MIT",
+  "type": "tool"
+}
