@@ -12,6 +12,7 @@ Unity Editor tool for generating **high-quality PNG icons and thumbnails** from 
 ## Features
 
 - **Real-time preview** — live render output with optional auto-refresh as you tweak settings
+- **Object transform** — adjust **position** and **rotation** of the asset in the icon frame
 - **Auto-framing** — one-click **Frame Target Asset** camera positioning from mesh bounds
 - **Custom background** — transparent PNG or solid color; optional temporary directional light
 - **Resolution settings** — export at any size (default 1024×1024); preview scales down for performance
@@ -49,7 +50,7 @@ Git URL: [https://github.com/makarGames/Unity-Asset-Icon-Generator.git](https://
 
 1. Open **Tools → Asset Icon Generator 📸**
 2. Assign a **prefab** or **3D model** to **Target Asset**
-3. Adjust rotation, camera, FOV, lighting, and background
+3. Adjust position, rotation, camera, FOV, lighting, and background
 4. Use **Frame Target Asset** to auto-fit the camera
 5. Click **Capture Icon** to save a PNG under your chosen folder
 

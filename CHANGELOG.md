@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-08-25
+
+### Added
+
+- **Object Position** offset in Transform Settings — slides the asset in the icon frame without changing camera angle.
+
+### Fixed
+
+- Moving **Object Position** no longer re-aims the camera at the object (that looked like a rotation change). Camera always looks at the isolation origin; position is composition-only.
+
 ## [1.0.1] - 2026-08-22
 
 ### Fixed

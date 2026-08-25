@@ -28,6 +28,13 @@ namespace AssetIconGenerator.Editor
 
         [VerticalGroup("MainLayout/Settings")]
         [BoxGroup("MainLayout/Settings/Transform Settings", ShowLabel = true)]
+        [LabelText("Object Position")]
+        [Tooltip("Slides the asset inside the frame without changing camera angle. Negative Y moves it down on screen.")]
+        [OnValueChanged(nameof(OnSettingsChanged))]
+        public Vector3 ObjectPosition = Vector3.zero;
+
+        [VerticalGroup("MainLayout/Settings")]
+        [BoxGroup("MainLayout/Settings/Transform Settings")]
         [LabelText("Object Rotation")]
         [OnValueChanged(nameof(OnSettingsChanged))]
         public Vector3 ObjectRotation = new Vector3(0f, 45f, 0f);
@@ -52,6 +59,7 @@ namespace AssetIconGenerator.Editor
         {
             if (TargetAsset == null) return;
 
+            // Frame against rotation only — Object Position is a post-frame composition slide.
             GameObject tempInstance = Instantiate(TargetAsset);
             tempInstance.transform.position = Vector3.zero;
             tempInstance.transform.rotation = Quaternion.Euler(ObjectRotation);
@@ -212,11 +220,16 @@ namespace AssetIconGenerator.Editor
         {
             Vector3 isolationPosition = new Vector3(0f, -10000f, 0f);
 
-            GameObject instance = Instantiate(TargetAsset, isolationPosition, Quaternion.Euler(ObjectRotation));
+            // Object Position only slides the mesh in the frame. Camera always looks at the
+            // isolation origin so changing Y/X/Z never tilts the view (no fake "rotation").
+            GameObject instance = Instantiate(
+                TargetAsset,
+                isolationPosition + ObjectPosition,
+                Quaternion.Euler(ObjectRotation));
 
             GameObject cameraObj = new GameObject("Temp_Icon_Camera");
             cameraObj.transform.position = isolationPosition + CameraOffset;
-            cameraObj.transform.LookAt(instance.transform);
+            cameraObj.transform.LookAt(isolationPosition);
 
             Camera cam = cameraObj.AddComponent<Camera>();
             cam.fieldOfView = FieldOfView;
