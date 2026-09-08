@@ -3,7 +3,7 @@
 [![Unity 2021.3+](https://img.shields.io/badge/Unity-2021.3%2B-black.svg?style=flat&logo=unity)](https://unity.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Unity Editor tool for generating **high-quality PNG icons and thumbnails** from prefabs and 3D models using **real-time rendering** — no scene setup required.
+Unity Editor tool for generating **high-quality PNG icons and thumbnails** from prefabs and 3D models using **real-time rendering** in an isolated Editor preview scene — no setup of your open level required.
 
 ![Preview](documentation/preview.png)
 
@@ -11,6 +11,7 @@ Unity Editor tool for generating **high-quality PNG icons and thumbnails** from 
 
 ## Features
 
+- **Isolated preview scene** — camera, light, and target never spawn into your open game scene; closing the window disposes the preview scene
 - **Real-time preview** — live render output with optional auto-refresh as you tweak settings
 - **Object transform** — adjust **position** and **rotation** of the asset in the icon frame
 - **Auto-framing** — one-click **Frame Target Asset** camera positioning from mesh bounds

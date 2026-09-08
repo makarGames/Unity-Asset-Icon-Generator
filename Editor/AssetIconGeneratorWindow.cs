@@ -2,12 +2,20 @@ using System.IO;
 using Sirenix.OdinInspector;
 using Sirenix.OdinInspector.Editor;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace AssetIconGenerator.Editor
 {
     public class AssetIconGeneratorWindow : OdinEditorWindow
     {
+        private const string TempCameraName = "Temp_Icon_Camera";
+        private const string TempLightName = "Temp_Icon_Light";
+
+        private Scene _previewScene;
+        private bool _didScavengeLegacy;
+
         [MenuItem("Tools/Asset Icon Generator 📸")]
         private static void OpenWindow()
         {
@@ -59,27 +67,36 @@ namespace AssetIconGenerator.Editor
         {
             if (TargetAsset == null) return;
 
-            // Frame against rotation only — Object Position is a post-frame composition slide.
-            GameObject tempInstance = Instantiate(TargetAsset);
-            tempInstance.transform.position = Vector3.zero;
-            tempInstance.transform.rotation = Quaternion.Euler(ObjectRotation);
+            EnsurePreviewScene();
+            ClearPreviewSceneRoots();
 
-            var renderers = tempInstance.GetComponentsInChildren<Renderer>();
-            if (renderers.Length > 0)
+            GameObject tempInstance = null;
+            try
             {
-                Bounds bounds = renderers[0].bounds;
-                for (int i = 1; i < renderers.Length; i++)
+                // Frame against rotation only — Object Position is a post-frame composition slide.
+                tempInstance = SpawnTargetInPreviewScene();
+                tempInstance.transform.SetPositionAndRotation(Vector3.zero, Quaternion.Euler(ObjectRotation));
+
+                var renderers = tempInstance.GetComponentsInChildren<Renderer>();
+                if (renderers.Length > 0)
                 {
-                    bounds.Encapsulate(renderers[i].bounds);
+                    Bounds bounds = renderers[0].bounds;
+                    for (int i = 1; i < renderers.Length; i++)
+                    {
+                        bounds.Encapsulate(renderers[i].bounds);
+                    }
+
+                    float maxDimension = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
+                    float distance = maxDimension / (2f * Mathf.Tan(0.5f * FieldOfView * Mathf.Deg2Rad));
+
+                    CameraOffset = bounds.center + new Vector3(0f, 0f, -distance * 1.2f);
                 }
-
-                float maxDimension = Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z);
-                float distance = maxDimension / (2f * Mathf.Tan(0.5f * FieldOfView * Mathf.Deg2Rad));
-
-                CameraOffset = bounds.center + new Vector3(0f, 0f, -distance * 1.2f);
+            }
+            finally
+            {
+                DestroyImmediateSafe(tempInstance);
             }
 
-            DestroyImmediate(tempInstance);
             OnSettingsChanged();
         }
 
@@ -167,6 +184,12 @@ namespace AssetIconGenerator.Editor
             }
 
             Texture2D finalScreenshot = RenderImage(Resolution.x, Resolution.y);
+            if (finalScreenshot == null)
+            {
+                Debug.LogError("[IconGenerator] Failed to render icon.");
+                return;
+            }
+
             byte[] bytes = finalScreenshot.EncodeToPNG();
             DestroyImmediate(finalScreenshot);
 
@@ -214,57 +237,109 @@ namespace AssetIconGenerator.Editor
             }
         }
 
+        // --- LIFECYCLE ---
+
+        protected override void OnEnable()
+        {
+            base.OnEnable();
+            if (!_didScavengeLegacy)
+            {
+                _didScavengeLegacy = true;
+                ScavengeLegacyTempObjects();
+            }
+        }
+
+        protected override void OnDisable()
+        {
+            DisposePreviewScene();
+            ClearPreview();
+            base.OnDisable();
+        }
+
+        protected override void OnDestroy()
+        {
+            DisposePreviewScene();
+            ClearPreview();
+            base.OnDestroy();
+        }
+
         // --- RENDER LOGIC ---
 
         private Texture2D RenderImage(int width, int height)
         {
-            Vector3 isolationPosition = new Vector3(0f, -10000f, 0f);
+            EnsurePreviewScene();
+            ClearPreviewSceneRoots();
 
             // Object Position only slides the mesh in the frame. Camera always looks at the
-            // isolation origin so changing Y/X/Z never tilts the view (no fake "rotation").
-            GameObject instance = Instantiate(
-                TargetAsset,
-                isolationPosition + ObjectPosition,
-                Quaternion.Euler(ObjectRotation));
-
-            GameObject cameraObj = new GameObject("Temp_Icon_Camera");
-            cameraObj.transform.position = isolationPosition + CameraOffset;
-            cameraObj.transform.LookAt(isolationPosition);
-
-            Camera cam = cameraObj.AddComponent<Camera>();
-            cam.fieldOfView = FieldOfView;
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = TransparentBackground ? new Color(0f, 0f, 0f, 0f) : BackgroundColor;
-
+            // preview origin so changing Y/X/Z never tilts the view (no fake "rotation").
+            GameObject instance = null;
+            GameObject cameraObj = null;
             GameObject lightObj = null;
-            if (SpawnTempLight)
+            RenderTexture rt = null;
+            Texture2D screenShot = null;
+
+            try
             {
-                lightObj = new GameObject("Temp_Icon_Light");
-                Light light = lightObj.AddComponent<Light>();
-                light.type = LightType.Directional;
-                light.intensity = 1.2f;
-                lightObj.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+                instance = SpawnTargetInPreviewScene();
+                instance.transform.SetPositionAndRotation(
+                    ObjectPosition,
+                    Quaternion.Euler(ObjectRotation));
+
+                cameraObj = CreateGameObjectInPreviewScene(TempCameraName);
+                cameraObj.transform.position = CameraOffset;
+                cameraObj.transform.LookAt(Vector3.zero);
+
+                Camera cam = cameraObj.AddComponent<Camera>();
+                cam.scene = _previewScene;
+                cam.fieldOfView = FieldOfView;
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = TransparentBackground ? new Color(0f, 0f, 0f, 0f) : BackgroundColor;
+                cam.enabled = false;
+
+                if (SpawnTempLight)
+                {
+                    lightObj = CreateGameObjectInPreviewScene(TempLightName);
+                    Light light = lightObj.AddComponent<Light>();
+                    light.type = LightType.Directional;
+                    light.intensity = 1.2f;
+                    lightObj.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+                }
+
+                rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+                cam.targetTexture = rt;
+
+                screenShot = new Texture2D(width, height, TextureFormat.ARGB32, false);
+
+                cam.Render();
+
+                RenderTexture.active = rt;
+                screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                screenShot.Apply();
+
+                return screenShot;
             }
+            catch
+            {
+                DestroyImmediateSafe(screenShot);
+                throw;
+            }
+            finally
+            {
+                if (cameraObj != null)
+                {
+                    Camera cam = cameraObj.GetComponent<Camera>();
+                    if (cam != null)
+                    {
+                        cam.targetTexture = null;
+                    }
+                }
 
-            RenderTexture rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
-            cam.targetTexture = rt;
-
-            Texture2D screenShot = new Texture2D(width, height, TextureFormat.ARGB32, false);
-
-            cam.Render();
-
-            RenderTexture.active = rt;
-            screenShot.ReadPixels(new Rect(0, 0, width, height), 0, 0);
-            screenShot.Apply();
-
-            cam.targetTexture = null;
-            RenderTexture.active = null;
-            DestroyImmediate(rt);
-            DestroyImmediate(cameraObj);
-            DestroyImmediate(instance);
-            if (lightObj != null) DestroyImmediate(lightObj);
-
-            return screenShot;
+                RenderTexture.active = null;
+                DestroyImmediateSafe(rt);
+                DestroyImmediateSafe(cameraObj);
+                DestroyImmediateSafe(instance);
+                DestroyImmediateSafe(lightObj);
+            }
         }
 
         private void ClearPreview()
@@ -276,10 +351,112 @@ namespace AssetIconGenerator.Editor
             }
         }
 
-        protected override void OnDestroy()
+        private void EnsurePreviewScene()
         {
-            base.OnDestroy();
-            ClearPreview();
+            if (_previewScene.IsValid())
+            {
+                return;
+            }
+
+            _previewScene = EditorSceneManager.NewPreviewScene();
+        }
+
+        private void DisposePreviewScene()
+        {
+            if (!_previewScene.IsValid())
+            {
+                return;
+            }
+
+            EditorSceneManager.ClosePreviewScene(_previewScene);
+            _previewScene = default;
+        }
+
+        private void ClearPreviewSceneRoots()
+        {
+            if (!_previewScene.IsValid())
+            {
+                return;
+            }
+
+            GameObject[] roots = _previewScene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                DestroyImmediateSafe(roots[i]);
+            }
+        }
+
+        private GameObject SpawnTargetInPreviewScene()
+        {
+            PrefabAssetType prefabType = PrefabUtility.GetPrefabAssetType(TargetAsset);
+            if (prefabType != PrefabAssetType.NotAPrefab)
+            {
+                GameObject prefabInstance = PrefabUtility.InstantiatePrefab(TargetAsset, _previewScene) as GameObject;
+                if (prefabInstance != null)
+                {
+                    return prefabInstance;
+                }
+            }
+
+            GameObject instance = Instantiate(TargetAsset);
+            EditorSceneManager.MoveGameObjectToScene(instance, _previewScene);
+            return instance;
+        }
+
+        private GameObject CreateGameObjectInPreviewScene(string objectName)
+        {
+            GameObject go = new GameObject(objectName);
+            EditorSceneManager.MoveGameObjectToScene(go, _previewScene);
+            return go;
+        }
+
+        private static void DestroyImmediateSafe(Object obj)
+        {
+            if (obj != null)
+            {
+                DestroyImmediate(obj);
+            }
+        }
+
+        /// <summary>
+        /// Removes leftover camera/light objects left in open game scenes by older package versions.
+        /// </summary>
+        private static void ScavengeLegacyTempObjects()
+        {
+            GameObject[] all = Resources.FindObjectsOfTypeAll<GameObject>();
+            int removed = 0;
+
+            for (int i = 0; i < all.Length; i++)
+            {
+                GameObject go = all[i];
+                if (go == null)
+                {
+                    continue;
+                }
+
+                if (go.name != TempCameraName && go.name != TempLightName)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(AssetDatabase.GetAssetPath(go)))
+                {
+                    continue;
+                }
+
+                if (EditorSceneManager.IsPreviewSceneObject(go))
+                {
+                    continue;
+                }
+
+                DestroyImmediate(go);
+                removed++;
+            }
+
+            if (removed > 0)
+            {
+                Debug.Log($"[IconGenerator] Removed {removed} leftover Temp_Icon_* object(s) from open scenes.");
+            }
         }
     }
 }

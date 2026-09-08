@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-08
+
+### Changed
+
+- Preview and capture now render inside an isolated **Editor preview scene** (`NewPreviewScene`) instead of the active game scene. Closing the window disposes that scene.
+
+### Fixed
+
+- Leftover prefab instances, `Temp_Icon_Camera`, and `Temp_Icon_Light` no longer pollute the open level when switching targets, failing mid-render, or closing the tool.
+- `Frame Target Asset` no longer temporarily instantiates the asset at world origin in the active scene.
+- Render cleanup always runs via `try/finally`.
+- On open, the window scavenges legacy `Temp_Icon_*` objects left by older package versions.
+
 ## [1.0.2] - 2026-08-25
 
 ### Added
